@@ -6,7 +6,6 @@
 #include "EEPROM.h"
 #include "TimerOne.h"
 
-
 #define NUM_LEDS 60
 #define DATA_PIN 13
 #define LDRPIN A3
@@ -14,7 +13,7 @@ CRGB leds[NUM_LEDS],minutes,hours,seconds,l,bg;
 RTC_DS1307 rtc;
 SerialCommand sCmd;
 boolean missed=0, ledState = 1, lastsec=1;
-byte lastsecond;
+byte lastsecond, rain;
 int light_low, light_high;
 
 void(* resetFunc) (void) = 0;
@@ -41,7 +40,8 @@ void setup() {
     EEPROM.write(10,0);
     EEPROM.write(11,0);
     EEPROM.write(12, 0);                   // Light sensitivity - low
-    EEPROM.write(13, 55);                  // Light sensitivity - high    
+    EEPROM.write(13, 55);                  // Light sensitivity - high 
+    EEPROM.write(14, 15);                  // Minutes for each rainbow   
     EEPROM.write(99,1);
   } 
   seconds.r = EEPROM.read(0);
@@ -57,7 +57,10 @@ void setup() {
   bg.g = EEPROM.read(10);
   bg.b = EEPROM.read(11);
   light_low = EEPROM.read(12);
-  light_high = EEPROM.read(13);  
+  light_high = EEPROM.read(13); 
+  rain = EEPROM.read(14); 
+  sCmd.addCommand("STAT", clockstatus);
+  sCmd.addCommand("SETRAIN", set_rainbow);
   sCmd.addCommand("MISSED", missedCall);
   sCmd.addCommand("MISSEDOFF", missedOff);
   sCmd.addCommand("HOUR", set_hour);
@@ -65,7 +68,6 @@ void setup() {
   sCmd.addCommand("SEC", set_second);
   sCmd.addCommand("BG", set_bg);
   sCmd.addCommand("RAINBOW", effects);
-  sCmd.addCommand("RESET", resetFunc);
   sCmd.addCommand("LIGHT", set_light);
   sCmd.addCommand("TIME", set_time);
   sCmd.addDefaultHandler(effects);
@@ -78,12 +80,12 @@ void loop() {
   // put your main code here, to run repeatedly:
   sCmd.readSerial();
   if(ledState){
-    DateTime now =   rtc.now(); // DateTime(2014,5,2,22,30,0); 
+    DateTime now =  rtc.now();// DateTime(2014,5,2,22,20,0); //
     int x = analogRead(LDRPIN);
     // Serial.println(x);
     x = map(x,light_low,light_high,20,100);
     x = constrain(x,20,100);
-    if(( now.minute() % 15 == 0 && now.second() == 0)){
+    if(( now.minute() % rain == 0 && now.second() == 0)){
        effects();
     }
     for(byte i=0; i<=now.minute();i++){
@@ -113,6 +115,55 @@ void loop() {
   //delay(250);
 } 
 
+void set_rainbow(){
+  rain = atoi(sCmd.next());
+  EEPROM.write(14,rain);
+  Serial.println("RAINBOW TIME SET");
+}
+void clockstatus(){
+  Serial.println("Status: ");
+  Serial.print("BG: ");
+  Serial.print(bg.r);
+  Serial.print(" ");
+  Serial.print(bg.g);
+  Serial.print(" ");
+  Serial.println(bg.b);
+  Serial.print("SEC: ");
+  Serial.print(seconds.r);
+  Serial.print(" ");
+  Serial.print(seconds.g);
+  Serial.print(" ");
+  Serial.println(seconds.b);
+  Serial.print("MINUTE: ");
+  Serial.print(minutes.r);
+  Serial.print(" ");
+  Serial.print(minutes.g);
+  Serial.print(" ");
+  Serial.println(minutes.b);
+  Serial.print("HOUR: ");
+  Serial.print(hours.r);
+  Serial.print(" ");
+  Serial.print(hours.g);
+  Serial.print(" ");
+  Serial.println(hours.b);
+  Serial.print("Ambient Light: ");
+  Serial.println(analogRead(LDRPIN));
+  Serial.print("Date: ");
+  DateTime now =  rtc.now(); // DateTime(2014,5,2,22,30,0); 
+  Serial.print(now.day(), DEC);
+  Serial.print('/');
+  Serial.print(now.month(), DEC);
+  Serial.print('/');
+  Serial.println(now.year(), DEC);
+  Serial.print("Time: ");
+  Serial.print(now.hour(), DEC);
+  Serial.print(':');
+  Serial.print(now.minute(), DEC);
+  Serial.print(':');
+  Serial.print(now.second(), DEC);
+  Serial.println();
+}
+
 void state(){
   ledState = 1;
 }
@@ -123,8 +174,8 @@ void effects(){
   Serial.println("RAINBOW");
   // LEDS.setBrightness(100);
   // uint8_t color[3];
-  for (int i = 0; i < 255; i++) { 
-    for (int j = 0; j < NUM_LEDS; j++) {
+  for (int i = 0; i < 300; i++) { 
+    for (byte j = 0; j < NUM_LEDS; j++) {
       leds[j]=CHSV(i+j*colorWheelAngle,255,150);
     }
     FastLED.show();
